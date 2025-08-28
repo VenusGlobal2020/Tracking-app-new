@@ -3,7 +3,7 @@ import React from 'react';
 export default function UserList({ users, selected, onSelect, statuses }) {
   return (
     <div className="bg-white rounded-2xl shadow p-4 h-[600px] overflow-auto">
-      <h3 className="text-lg font-semibold mb-3">Users</h3>
+      <h3 className="text-lg font-semibold mb-3"> ACTIVE USERS</h3>
       <ul className="space-y-2">
         {users.map(u => (
           <li key={u._id}>

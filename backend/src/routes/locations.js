@@ -5,7 +5,7 @@ import { checkGeofenceEntry } from '../services/geofence.js';
 
 const router = Router();
 
-// Save an incoming location point (from user). Avoid duplicates when stationary.
+// Save an incoming location point (from user)
 router.post('/', authRequired, async (req, res) => {
   try {
     const { lat, long, status, timestamp } = req.body;
@@ -14,27 +14,50 @@ router.post('/', authRequired, async (req, res) => {
     }
     const userId = req.user.id;
 
-    // fetch last location to dedupe stationary points
     const last = await Location.findOne({ userId }).sort({ timestamp: -1 });
     if (last && status === 'stationary') {
-      const sameSpot = Math.abs(last.lat - lat) < 1e-5 && Math.abs(last.long - long) < 1e-5 && last.status === 'stationary'
+      const sameSpot = Math.abs(last.lat - lat) < 1e-5 &&
+                       Math.abs(last.long - long) < 1e-5 &&
+                       last.status === 'stationary';
       if (sameSpot) {
-        // still emit socket event for realtime updates but don't save duplicate
-        req.io.to('admins').emit('location_update', { userId, lat, long, status, timestamp: timestamp || new Date().toISOString(), duplicate: true });
+        req.io.to('admins').emit('location_update', {
+          userId,
+          lat,
+          long,
+          status,
+          timestamp: timestamp || new Date().toISOString(),
+          duplicate: true
+        });
         return res.json({ skipped: true });
       }
     }
 
-    const loc = await Location.create({ userId, lat, long, status, timestamp: timestamp ? new Date(timestamp) : new Date() });
+    const loc = await Location.create({
+      userId,
+      lat,
+      long,
+      status,
+      timestamp: timestamp ? new Date(timestamp) : new Date()
+    });
 
-    // Geofence check -> notify admins if entered
     const { inside, geofence } = await checkGeofenceEntry(userId, lat, long);
     if (inside) {
-      req.io.to('admins').emit('geofence_enter', { userId, geofenceId: geofence._id, lat, long, at: Date.now() });
+      req.io.to('admins').emit('geofence_enter', {
+        userId,
+        geofenceId: geofence._id,
+        lat,
+        long,
+        at: Date.now()
+      });
     }
 
-    // Emit for admins (and user room if needed)
-    req.io.to('admins').emit('location_update', { userId, lat, long, status, timestamp: loc.timestamp });
+    req.io.to('admins').emit('location_update', {
+      userId,
+      lat,
+      long,
+      status,
+      timestamp: loc.timestamp
+    });
 
     res.json({ id: loc._id });
   } catch (e) {
@@ -43,16 +66,28 @@ router.post('/', authRequired, async (req, res) => {
   }
 });
 
-// Get route history
+// 🔹 Get route history (with optional start & end date)
 router.get('/history/:userId', authRequired, async (req, res) => {
   try {
     const { userId } = req.params;
-    const { sinceHours = 24 } = req.query;
-    const since = new Date(Date.now() - Number(sinceHours) * 3600 * 1000);
-    const points = await (await Location.find({ userId, timestamp: { $gte: since } }).sort({ timestamp: 1 })).map(p => ({
-      lat: p.lat, long: p.long, status: p.status, timestamp: p.timestamp
-    }));
-    res.json(points);
+    const { sinceHours, start, end } = req.query;
+
+    let query = { userId };
+
+    if (start && end) {
+      query.timestamp = { $gte: new Date(start), $lte: new Date(end) };
+    } else if (sinceHours) {
+      const since = new Date(Date.now() - Number(sinceHours) * 3600 * 1000);
+      query.timestamp = { $gte: since };
+    }
+
+    const points = await Location.find(query).sort({ timestamp: 1 });
+    res.json(points.map(p => ({
+      lat: p.lat,
+      long: p.long,
+      status: p.status,
+      timestamp: p.timestamp
+    })));
   } catch (e) {
     console.error(e);
     res.status(500).json({ message: 'Server error' });

@@ -21,6 +21,25 @@ function catmullRomSpline(points, segments = 8) {
   return res;
 }
 
+// Custom icons
+const startIcon = new L.Icon({
+  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-green.png",
+  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+
+const endIcon = new L.Icon({
+  iconUrl: "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png",
+  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
+});
+
 export default function MapView({ points=[], stationary=[], geofence=null, routeToTarget=null }) {
   const mapRef = useRef(null);
   const center = points.length ? [points[points.length-1].lat, points[points.length-1].long] : [28.6139, 77.2090];
@@ -38,27 +57,46 @@ export default function MapView({ points=[], stationary=[], geofence=null, route
   return (
     <MapContainer center={center} zoom={13} ref={mapRef} className="w-full h-[600px] rounded-2xl shadow bg-white">
       <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-      {smooth.length >= 2 && <Polyline positions={smooth} />}
-      {points.map((p, idx) => (
-        <Marker key={idx} position={[p.lat, p.long]}>
+
+      {/* Blue Path */}
+      {smooth.length >= 2 && <Polyline positions={smooth} pathOptions={{ color: 'blue', weight: 4 }} />}
+
+      {/* Start Point → Green Marker */}
+      {points.length > 0 && (
+        <Marker position={[points[0].lat, points[0].long]} icon={startIcon}>
           <Popup>
             <div className="text-sm">
-              <div><b>Status:</b> {p.status}</div>
-              <div><b>Time:</b> {new Date(p.timestamp).toLocaleString()}</div>
+              <div><b>Tracking Started</b></div>
+              <div><b>Status:</b> {points[0].status}</div>
+              <div><b>Time:</b> {new Date(points[0].timestamp).toLocaleString()}</div>
             </div>
           </Popup>
         </Marker>
-      ))}
-      {stationary.map((p, idx) => (
-        <Marker key={'s'+idx} position={[p.lat, p.long]}>
-          <Popup>Stationary</Popup>
+      )}
+
+      {/* End Point → Red Marker */}
+      {points.length > 1 && (
+        <Marker position={[points[points.length-1].lat, points[points.length-1].long]} icon={endIcon}>
+          <Popup>
+            <div className="text-sm">
+              <div><b>Tracking Stopped</b></div>
+              <div><b>Status:</b> {points[points.length-1].status}</div>
+              <div><b>Time:</b> {new Date(points[points.length-1].timestamp).toLocaleString()}</div>
+            </div>
+          </Popup>
         </Marker>
-      ))}
+      )}
+
+      {/* Stationary points → No markers */}
+
+      {/* Geofence */}
       {geofence && (
         <Circle center={[geofence.targetLat, geofence.targetLong]} radius={geofence.radius}>
           <Popup>Geofence radius: {geofence.radius} m</Popup>
         </Circle>
       )}
+
+      {/* Route to target */}
       {routeToTarget && routeToTarget.length >= 2 && <Polyline positions={routeToTarget} />}
     </MapContainer>
   );
